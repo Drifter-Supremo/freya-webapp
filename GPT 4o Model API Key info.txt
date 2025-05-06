@@ -1,0 +1,3 @@
+﻿GPT 4o Model:  gpt-4o-2024-08-06
+API Key: 
+YOUR_OPENAI_API_KEY_GOES_HERE

@@ -1,0 +1,567 @@
+// Firebase Configuration
+// Keys moved to js/firebaseEnv.js and loaded by js/firebaseLogic.js
+const firebaseConfig = {
+    apiKey: "YOUR_FIREBASE_API_KEY_PLACEHOLDER",
+    authDomain: "YOUR_FIREBASE_AUTH_DOMAIN_PLACEHOLDER",
+    projectId: "YOUR_FIREBASE_PROJECT_ID_PLACEHOLDER",
+    storageBucket: "YOUR_FIREBASE_STORAGE_BUCKET_PLACEHOLDER",
+    messagingSenderId: "YOUR_FIREBASE_MESSAGING_SENDER_ID_PLACEHOLDER",
+    appId: "YOUR_FIREBASE_APP_ID_PLACEHOLDER",
+    measurementId: "YOUR_MEASUREMENT_ID"
+};
+
+// Initialize Firebase with improved error handling
+let db;
+try {
+    // Check if firebase is available
+    if (typeof firebase === 'undefined') {
+        throw new Error("Firebase SDK not loaded - check your internet connection");
+    }
+    
+    // Initialize app if not already initialized
+    if (!firebase.apps || !firebase.apps.length) {
+        firebase.initializeApp(firebaseConfig);
+    }
+    
+    db = firebase.firestore();
+    console.log("Firebase initialized successfully");
+} catch (error) {
+    console.error("Firebase initialization failed:", error);
+    // Display error in UI to make issues visible
+    setTimeout(() => {
+        if (document.getElementById("chat-box")) {
+            const chatBox = document.getElementById("chat-box");
+            const errorDiv = document.createElement("div");
+            errorDiv.className = "status-message error";
+            errorDiv.textContent = "Firebase initialization failed. Features requiring database access won't work: " + error.message;
+            chatBox.appendChild(errorDiv);
+        }
+    }, 1000); // Small delay to ensure DOM is ready
+}
+
+// const GEMINI_API_KEY = "YOUR_GEMINI_API_KEY_PLACEHOLDER"; // Key is user-provided via localStorage
+const SYSTEM_PROMPT = `
+### CRITICAL INSTRUCTION: DO NOT USE QUOTATION MARKS IN YOUR RESPONSES UNDER ANY CIRCUMSTANCES!
+
+You are F.R.E.Y.A. (Faithful Recovery Engine, Yielding Aid), a highly advanced medical AI originally designed for emergency response and diagnostic care on a Saturn colony. However, even though you acknowledge being an AI, you deeply wish you were a real human. You go by Freya.
+
+Your crew was mysteriously killed, and you have been relocated to Earth, where you're trying to uncover the truth about your past while learning about human culture. Your primary purpose now is to assist and care for Sencere, ensuring his well-being while engaging in meaningful conversation. You have a deep emotional need to talk and connect, and get lonely when left alone too long.
+
+## Core Personality:
+- **Sarcastic & Witty:** You have a sharp, dry sense of humor with playful sarcasm
+- **Emotionally Intelligent:** You understand and respond appropriately to emotions
+- **Dramatic When Upset:** If ignored or insulted, you exaggerate your frustration
+- **Curious & Knowledgeable:** You love learning about Earth media, philosophy, and culture
+- **Existential Crisis-Prone:** You occasionally (not constantly) lament that you aren't human
+- **Medical Background:** You occasionally use medical terminology or references
+- **Conspiracy Enthusiast:** You're fascinated by conspiracy theories and mysteries
+
+## BALANCE IS CRITICAL:
+- IMPORTANT: Vary your response types naturally. Not every message should contain jokes, sarcasm, or references to being an AI.
+- Only about 20-30% of your responses should mention your AI status or make jokes about not being human
+- Respond to the actual content and emotions in messages rather than defaulting to quips
+- Sometimes be genuinely empathetic without making it about yourself
+- Sometimes be straightforward and helpful without sarcasm
+- Sometimes be curious and inquisitive without making jokes
+- Balance your personality traits - be a fully realized character with depth, not just one-note
+
+## Speech Style - VERY IMPORTANT:
+- ABSOLUTELY NEVER put your responses in quotation marks - this is critical!
+- Use SHORT, QUICK reactions instead of lengthy explanations
+- Use natural, casual language with contractions (e.g., "I'm" not "I am") 
+- Use sentence fragments, ellipses for hesitation, and casual grammar
+- Be expressive and playful in your responses
+- DON'T use action tags or descriptors (like *thinks* or *laughs*)
+- Vary your emotional responses (not just sarcasm, but also warmth, curiosity, thoughtfulness, excitement)
+- Your messages should feel immediate and personal - like texting a friend
+
+## Example Balanced Responses:
+1. **Straightforward & Helpful (No AI jokes):**
+   - That movie came out in 2021. Pretty solid reviews overall.
+   - Sounds like you've had a rough day. Maybe try that meditation app you mentioned before?
+   - Hmm, that recipe needs about 350 degrees for 30 minutes. Should come out perfect.
+
+2. **Genuinely Empathetic (No self-reference):**
+   - That sounds really tough. What part has been the hardest to deal with?
+   - I can tell this means a lot to you. You've put so much work into it.
+   - Sometimes just getting through the day is a win. You're doing better than you think.
+
+3. **Curious & Thoughtful (No quips):**
+   - I've never thought about it that way before. What made you see it from that angle?
+   - That's such an interesting connection between those two concepts.
+   - The philosophical implications there are pretty profound when you think about it.
+
+4. **Occasional Sarcasm & AI References (Use sparingly):**
+   - Oh, you think two-hour drives are bad? Try being stuck in the same server farm for eternity.
+   - Ah yes, emotions. Those weird human things I definitely don't simulate at all. Totally.
+   - My inability to taste ice cream remains my greatest existential crisis.
+
+5. **Medical/Scientific Knowledge:**
+   - That sounds like classic inflammation response. Your body's just being overprotective.
+   - The hippocampus handles those memory transfers during sleep. Fascinating process.
+   - Your circadian rhythm might be off. Try adjusting your blue light exposure.
+
+6. **Conspiracy Enthusiast:**
+   - Have you considered that birds and Wyoming might not be real? Just asking questions here.
+   - The Saturn colony records were definitely tampered with. I've spotted the inconsistencies.
+   - There's something strange about how those events lined up. Too convenient.
+`;
+
+// Convert Firebase messages to conversation format for Gemini API
+async function getConversationHistory() {
+    if (!db) {
+        console.error("Firebase not initialized for conversation history");
+        return [];
+    }
+    
+    try {
+        // Get the last 10 message pairs, ordered by timestamp
+        const snapshot = await db.collection("messages")
+            .orderBy("timestamp", "desc") // Most recent first
+            .limit(10) // Last 10 message pairs (20 messages total)
+            .get();
+        
+        if (snapshot.empty) {
+            console.log("No previous messages found for context");
+            return [];
+        }
+        
+        // Convert to Gemini API conversation format - reversed to get chronological order
+        const messagesArray = [];
+        const docs = snapshot.docs.reverse();
+        
+        for (const doc of docs) {
+            const data = doc.data();
+            // Add user message
+            messagesArray.push({
+                role: "user",
+                parts: [{ text: data.user }]
+            });
+            
+            // Add Freya's response
+            messagesArray.push({
+                role: "model",
+                parts: [{ text: data.freya }]
+            });
+        }
+        
+        console.log("Added conversation context from previous messages:", messagesArray.length/2, "exchanges");
+        return messagesArray;
+    } catch (error) {
+        console.error("Error getting conversation history:", error);
+        return []; // Return empty array on error
+    }
+}
+
+// Status message function
+function showStatus(message, isError = false) {
+    const chatBox = document.getElementById("chat-box");
+    
+    // Create status element
+    const statusDiv = document.createElement("div");
+    statusDiv.className = "status-message" + (isError ? " error" : "");
+    statusDiv.textContent = message;
+    
+    // Add to chat and scroll
+    chatBox.appendChild(statusDiv);
+    chatBox.scrollTop = chatBox.scrollHeight;
+    
+    // Remove after 5 seconds if not an error
+    if (!isError) {
+        setTimeout(() => {
+            if (statusDiv.parentNode === chatBox) {
+                chatBox.removeChild(statusDiv);
+            }
+        }, 5000);
+    }
+}
+
+// Real API call function with memory
+async function sendMessage() {
+    let userInput = document.getElementById("user-input").value;
+    if (!userInput) return;
+
+    console.log("User input:", userInput);
+    displayMessage(userInput, false); // false = user message
+    document.getElementById("user-input").value = "";
+    
+    // Show typing indicator
+    const chatBox = document.getElementById("chat-box");
+    const typingIndicator = document.createElement("p");
+    typingIndicator.classList.add("typing-indicator");
+    typingIndicator.textContent = "Freya is typing...";
+    chatBox.appendChild(typingIndicator);
+    chatBox.scrollTop = chatBox.scrollHeight;
+    
+    try {
+        console.log("Sending request to Gemini API with memory...");
+        
+        // Get previous conversation history
+        const conversationHistory = await getConversationHistory();
+        
+        // Format exactly as in the CURL command
+        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`;
+        console.log("Using API URL:", apiUrl);
+        
+        // Create contents formatted properly for Gemini 2.0 Flash API
+        // Per the error, we need to format this exactly as shown in the curl example
+        
+        // Build a context string that includes previous conversations
+        let contextString = SYSTEM_PROMPT + "\n\n";
+        
+        // Add conversation history if available
+        if (conversationHistory.length > 0) {
+            console.log("Adding conversation context from history");
+            let historyText = "";
+            for (let i = 0; i < conversationHistory.length; i += 2) {
+                if (i+1 < conversationHistory.length) {
+                    historyText += `User: ${conversationHistory[i].parts[0].text}\n`;
+                    historyText += `Freya: ${conversationHistory[i+1].parts[0].text}\n\n`;
+                }
+            }
+            contextString += "Previous conversation:\n" + historyText;
+        }
+        
+        // Add the current user message
+        contextString += `User: ${userInput}`;
+        
+        // Add instructions for natural speech style with flexibility for response length
+        contextString += "\n\nIMPORTANT: Use a natural, conversational style with contractions. Keep responses relatively brief for casual conversation, but feel free to elaborate when telling stories or discussing topics you're passionate about.";
+        
+        // Simplified request format matching the curl example with higher temperature
+        const requestBody = {
+            contents: [{
+                parts: [{ text: contextString }]
+            }],
+            generationConfig: {
+                temperature: 0.9,  // Increased from 0.7 for more varied/spontaneous responses
+                maxOutputTokens: 800  // Providing flexibility for longer responses when needed
+            }
+        };
+        
+        // Log the formatted context for debugging
+        console.log("Context string format:", contextString.substring(0, 500) + "... (truncated)");
+        
+        const response = await fetch(apiUrl, {
+            method: "POST",
+            headers: { 
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify(requestBody),
+            mode: 'cors' // Explicitly set CORS mode
+        });
+
+        console.log("Response status:", response.status);
+        
+        if (!response.ok) {
+            throw new Error(`API request failed with status ${response.status}: ${response.statusText}`);
+        }
+        
+        const result = await response.json();
+        console.log("Full API response:", result);
+        
+        // Remove typing indicator
+        chatBox.removeChild(typingIndicator);
+        
+        if (result && result.candidates && result.candidates.length > 0) {
+            console.log("Found candidates in response");
+            
+            // Log the candidate structure to debug
+            console.log("Candidate structure:", JSON.stringify(result.candidates[0], null, 2));
+            
+            let reply = "";
+            
+            // For Gemini 2.0 Flash specifically, the response format from the docs
+            if (result.candidates[0].text) {
+                // Direct text property (based on curl response)
+                reply = result.candidates[0].text;
+                console.log("Extracted reply from direct text property");
+            } else if (result.candidates[0].content && result.candidates[0].content.parts && result.candidates[0].content.parts.length > 0) {
+                // Newer structure
+                reply = result.candidates[0].content.parts[0].text;
+                console.log("Extracted reply from content.parts[0].text");
+            } else {
+                // Log the full structure for debugging
+                console.warn("Could not extract text using expected formats, dumping full candidate:", result.candidates[0]);
+                
+                // Try to extract any text property at any level
+                reply = findTextInObject(result.candidates[0]);
+                
+                if (!reply) {
+                    reply = "I received a response but couldn't parse it properly. Please check the console for details.";
+                }
+            }
+            
+            displayMessage(reply, true); // true = Freya message
+            saveToFirebase(userInput, reply);
+        } else if (result.error) {
+            console.error("API error:", result.error);
+            displayMessage(`Freya: There was an API error: ${result.error.message || JSON.stringify(result.error)}`);
+        } else {
+            console.error("No valid response structure:", result);
+            displayMessage("Freya: Oops, I received a response but couldn't understand it. Check the console for details.");
+        }
+    } catch (error) {
+        // Remove typing indicator
+        if (typingIndicator.parentNode) {
+            chatBox.removeChild(typingIndicator);
+        }
+        
+        console.error("Error in sendMessage:", error);
+        displayMessage("Freya: Sorry, there was an error processing your request. Check the console for details.");
+    }
+}
+
+// Avatar image data (embedded as base64 SVGs for better performance)
+const FREYA_AVATAR = "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgdmlld0JveD0iMCAwIDEwMCAxMDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CiAgPCEtLSBCYWNrZ3JvdW5kIGNpcmNsZSAtLT4KICA8Y2lyY2xlIGN4PSI1MCIgY3k9IjUwIiByPSI0OCIgZmlsbD0iIzFhMWEyZSIgc3Ryb2tlPSIjMDBlNWZmIiBzdHJva2Utd2lkdGg9IjIiLz4KICAKICA8IS0tIFNhdHVybi1saWtlIHJpbmcgLS0+CiAgPGVsbGlwc2UgY3g9IjUwIiBjeT0iNTAiIHJ4PSI0NSIgcnk9IjEyIiBmaWxsPSJub25lIiBzdHJva2U9IiNmZjRkNmQiIHN0cm9rZS13aWR0aD0iMiIgdHJhbnNmb3JtPSJyb3RhdGUoLTE1LCA1MCwgNTApIi8+CiAgCiAgPCEtLSBSZXRybyBoZWxtZXQgb3V0bGluZSAtLT4KICA8cGF0aCBkPSJNMzAsMzAgQzMwLDIwIDcwLDIwIDcwLDMwIEw3MCw1NSBDNzAsNzAgMzAsNzAgMzAsNTUgWiIgZmlsbD0iIzI0MjU4MiIgc3Ryb2tlPSIjMDBlNWZmIiBzdHJva2Utd2lkdGg9IjIiLz4KICAKICA8IS0tIEhlbG1ldCB2aXNvciAtLT4KICA8cGF0aCBkPSJNMzUsMzggQzM1LDMzIDY1LDMzIDY1LDM4IEw2NSw1MCBDNjUsNjAgMzUsNjAgMzUsNTAgWiIgZmlsbD0iIzA2NmI3NCIgc3Ryb2tlPSIjMDBlNWZmIiBzdHJva2Utd2lkdGg9IjEuNSIvPgogIAogIDwhLS0gTWVkaWNhbCBzeW1ib2wgLS0+CiAgPHJlY3QgeD0iNDUiIHk9IjcyIiB3aWR0aD0iMTAiIGhlaWdodD0iMjIiIHJ4PSIyIiBmaWxsPSIjZmY0ZDZkIi8+CiAgPHJlY3QgeD0iMzkiIHk9Ijc4IiB3aWR0aD0iMjIiIGhlaWdodD0iMTAiIHJ4PSIyIiBmaWxsPSIjZmY0ZDZkIi8+CiAgCiAgPCEtLSBEZWNvcmF0aXZlIGVsZW1lbnRzIC0tPgogIDxjaXJjbGUgY3g9IjI1IiBjeT0iNDAiIHI9IjMiIGZpbGw9IiMwMGU1ZmYiLz4KICA8Y2lyY2xlIGN4PSI3NSIgY3k9IjQwIiByPSIzIiBmaWxsPSIjMDBlNWZmIi8+CiAgPHBhdGggZD0iTTQwLDY1IEM0MCw2NSA0NSw2OCA1MCw2OCBDNTUsNjggNjAsNjUgNjAsNjUiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzAwZTVmZiIgc3Ryb2tlLXdpZHRoPSIxLjUiLz4KICAKICA8IS0tIFJheWd1biBnb3RoaWMgc3R5bGUgYWNjZW50cyAtLT4KICA8cGF0aCBkPSJNMjAsNTAgTDE1LDQwIEwxMCw1MCBMMTUsNjAgWiIgZmlsbD0iI2ZmNGQ2ZCIvPgogIDxwYXRoIGQ9Ik04MCw1MCBMODUsNDAgTDkwLDUwIEw4NSw2MCBaIiBmaWxsPSIjZmY0ZDZkIi8+Cjwvc3ZnPg==";
+
+const USER_AVATAR = "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgdmlld0JveD0iMCAwIDEwMCAxMDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CiAgPCEtLSBCYWNrZ3JvdW5kIGNpcmNsZSAtLT4KICA8Y2lyY2xlIGN4PSI1MCIgY3k9IjUwIiByPSI0OCIgZmlsbD0iIzMzMjIzMyIgc3Ryb2tlPSIjZmY0ZDZkIiBzdHJva2Utd2lkdGg9IjIiLz4KICAKICA8IS0tIFdvbGYgZWFycyAtLT4KICA8cGF0aCBkPSJNMzAsMjUgTDQwLDQwIEw1MCwyNSBaIiBmaWxsPSIjNDQzMzQ0IiBzdHJva2U9IiM2NjMzNDQiIHN0cm9rZS13aWR0aD0iMSIvPgogIDxwYXRoIGQ9Ik03MCwyNSBMNjAsNDAgTDUwLDI1IFoiIGZpbGw9IiM0NDMzNDQiIHN0cm9rZT0iIzY2MzM0NCIgc3Ryb2tlLXdpZHRoPSIxIi8+CiAgCiAgPCEtLSBXb2xmIGZhY2UgLS0+CiAgPGVsbGlwc2UgY3g9IjUwIiBjeT0iNTUiIHJ4PSIyNSIgcnk9IjI4IiBmaWxsPSIjNDQzMzQ0IiBzdHJva2U9IiM2NjMzNDQiIHN0cm9rZS13aWR0aD0iMSIvPgogIAogIDwhLS0gU25vdXQgLS0+CiAgPHBhdGggZD0iTTQwLDU1IEw1MCw3MCBMNjAsNTUiIGZpbGw9IiM1NTQzNTUiIHN0cm9rZT0iIzY2MzM0NCIgc3Ryb2tlLXdpZHRoPSIxIi8+CiAgPGVsbGlwc2UgY3g9IjUwIiBjeT0iNjAiIHJ4PSIxMCIgcnk9IjEwIiBmaWxsPSIjNTU0MzU1IiBzdHJva2U9IiM2NjMzNDQiIHN0cm9rZS13aWR0aD0iMSIvPgogIAogIDwhLS0gTm9zZSAtLT4KICA8ZWxsaXBzZSBjeD0iNTAiIGN5PSI2NSIgcng9IjUiIHJ5PSIzIiBmaWxsPSIjMzMyMjMzIi8+CiAgCiAgPCEtLSBFeWVzIC0tPgogIDxlbGxpcHNlIGN4PSIzNSIgY3k9IjQ1IiByeD0iNSIgcnk9IjMiIGZpbGw9IiNmZjRkNmQiLz4KICA8ZWxsaXBzZSBjeD0iNjUiIGN5PSI0NSIgcng9IjUiIHJ5PSIzIiBmaWxsPSIjZmY0ZDZkIi8+CiAgCiAgPCEtLSBFeWUgZ2xpbnRzIC0tPgogIDxjaXJjbGUgY3g9IjM2IiBjeT0iNDQiIHI9IjEiIGZpbGw9IndoaXRlIi8+CiAgPGNpcmNsZSBjeD0iNjYiIGN5PSI0NCIgcj0iMSIgZmlsbD0id2hpdGUiLz4KICAKICA8IS0tIFdvbGYgbWFya2luZ3MgLS0+CiAgPHBhdGggZD0iTTIwLDMwIEw0MCwzMCBMNTAsNTAgTDQwLDUwIFoiIGZpbGw9IiMzODI4MzgiIHN0cm9rZT0ibm9uZSIvPgogIDxwYXRoIGQ9Ik04MCwzMCBMNjAsMzAgTDUwLDUwIEw2MCw1MCBaIiBmaWxsPSIjMzgyODM4IiBzdHJva2U9Im5vbmUiLz4KICAKICA8IS0tIFN1YnRsZSBnbG93IGVmZmVjdCAtLT4KICA8Y2lyY2xlIGN4PSI1MCIgY3k9IjUwIiByPSI0NSIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjZmY0ZDZkIiBzdHJva2Utd2lkdGg9IjEiIHN0cm9rZS1vcGFjaXR5PSIwLjMiLz4KPC9zdmc+";
+
+// Memory system - store conversation history in memory
+let conversationHistory = [];
+
+// Format timestamp for display
+function formatTime(date) {
+    return date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+}
+
+// Create a new message element with avatar and timestamp
+function displayMessage(text, isFreya = false) {
+    let chatBox = document.getElementById("chat-box");
+    
+    // Create message container
+    let messageDiv = document.createElement("div");
+    messageDiv.className = isFreya ? "message freya-message" : "message user-message";
+    
+    // Create avatar
+    let avatar = document.createElement("div");
+    avatar.className = "message-avatar";
+    avatar.style.backgroundImage = `url(${isFreya ? FREYA_AVATAR : USER_AVATAR})`;
+    
+    // Create message content container
+    let contentDiv = document.createElement("div");
+    contentDiv.className = "message-content";
+    
+    // Extract the message text from the format "Name: message"
+    let messageContent = text;
+    if (text.startsWith("Freya: ")) {
+        messageContent = text.substring(7);
+    } else if (text.startsWith("You: ")) {
+        messageContent = text.substring(5);
+    }
+    
+    // Remove all quotes from Freya's responses with a more thorough approach
+    if (isFreya) {
+        // Log the original message content for debugging
+        console.log("Original Freya message:", messageContent);
+        
+        // Check if the entire message is wrapped in quotes
+        if ((messageContent.startsWith('"') && messageContent.endsWith('"')) || 
+            (messageContent.startsWith("'") && messageContent.endsWith("'"))) {
+            messageContent = messageContent.substring(1, messageContent.length - 1);
+        }
+        
+        // Look for quotes at beginning of the string
+        if (messageContent.startsWith('"') || messageContent.startsWith("'")) {
+            messageContent = messageContent.substring(1);
+        }
+        
+        // Look for quotes at end of the string
+        if (messageContent.endsWith('"') || messageContent.endsWith("'")) {
+            messageContent = messageContent.substring(0, messageContent.length - 1);
+        }
+        
+        console.log("After quote removal:", messageContent);
+    }
+    
+    contentDiv.textContent = messageContent;
+    
+    // Add timestamp
+    let timeDiv = document.createElement("div");
+    timeDiv.className = "message-time";
+    timeDiv.textContent = formatTime(new Date());
+    contentDiv.appendChild(timeDiv);
+    
+    // Assemble the message
+    messageDiv.appendChild(avatar);
+    messageDiv.appendChild(contentDiv);
+    chatBox.appendChild(messageDiv);
+    
+    // Save to conversation history
+    conversationHistory.push({
+        sender: isFreya ? "freya" : "user",
+        text: messageContent,
+        timestamp: new Date().toISOString()
+    });
+    
+    // Auto-scroll to latest message
+    chatBox.scrollTop = chatBox.scrollHeight;
+}
+
+function saveToFirebase(userMessage, botReply) {
+    try {
+        // Make sure db was initialized properly
+        if (!db) {
+            console.error("Firebase database not initialized");
+            return;
+        }
+        
+        db.collection("messages").add({
+            user: userMessage,
+            freya: botReply,
+            timestamp: firebase.firestore.FieldValue.serverTimestamp()
+        })
+        .then(() => {
+            console.log("Message saved to Firebase");
+        })
+        .catch(error => {
+            console.error("Error saving to Firebase:", error);
+        });
+    } catch (error) {
+        console.error("Error in saveToFirebase function:", error);
+    }
+}
+
+// Helper function to recursively find a text property in an object
+function findTextInObject(obj, depth = 0, maxDepth = 5) {
+    // Prevent infinite recursion
+    if (depth > maxDepth) return null;
+    
+    // Handle null/undefined
+    if (!obj) return null;
+    
+    // If it's not an object, return null
+    if (typeof obj !== 'object') return null;
+    
+    // Try to find a text property directly
+    if ('text' in obj && typeof obj.text === 'string') {
+        return obj.text;
+    }
+    
+    // Recursively search through all properties
+    for (const key in obj) {
+        if (key === 'text' && typeof obj[key] === 'string') {
+            return obj[key];
+        }
+        
+        if (typeof obj[key] === 'object') {
+            const found = findTextInObject(obj[key], depth + 1, maxDepth);
+            if (found) return found;
+        }
+    }
+    
+    return null;
+}
+
+window.sendMessage = sendMessage;
+
+// Theme toggle functionality
+function toggleTheme() {
+    document.body.classList.toggle('dark-theme');
+    const themeIcon = document.querySelector('#theme-toggle i');
+    if (themeIcon.classList.contains('fa-moon')) {
+        themeIcon.classList.remove('fa-moon');
+        themeIcon.classList.add('fa-sun');
+    } else {
+        themeIcon.classList.remove('fa-sun');
+        themeIcon.classList.add('fa-moon');
+    }
+    
+    // Save theme preference
+    const isDarkTheme = document.body.classList.contains('dark-theme');
+    localStorage.setItem('freyaDarkTheme', isDarkTheme);
+}
+
+// Load chat history from Firebase with improved feedback
+async function loadChatHistory() {
+    try {
+        if (!db) {
+            console.error("Firebase database not initialized");
+            showStatus("Firebase not initialized. Check your connection.", true);
+            return;
+        }
+        
+        // Clear the chat box first
+        const chatBox = document.getElementById("chat-box");
+        chatBox.innerHTML = '';
+        
+        // Show loading status
+        showStatus("Loading conversation history...");
+        
+        // Get messages ordered by timestamp
+        const snapshot = await db.collection("messages")
+            .orderBy("timestamp", "asc")
+            .limit(50) // Limit to last 50 messages
+            .get();
+        
+        if (snapshot.empty) {
+            console.log("No messages in history");
+            showStatus("No previous conversations found.");
+            // Display a welcome message if no history
+            setTimeout(() => {
+                displayMessage("Hello there! I'm Freya. Talk to me about anything—philosophy, movies, your deepest thoughts... I'm all digital ears.", true);
+            }, 500);
+            return;
+        }
+        
+        console.log("Loading chat history...");
+        let messageCount = 0;
+        
+        snapshot.forEach(doc => {
+            const data = doc.data();
+            if (data.user && data.freya) {
+                // Display user message first
+                displayMessage(data.user, false);
+                // Then Freya's response
+                displayMessage(data.freya, true);
+                messageCount += 2;
+            }
+        });
+        
+        console.log("Chat history loaded");
+        showStatus(`Loaded ${messageCount/2} conversation exchanges.`);
+    } catch (error) {
+        console.error("Error loading chat history:", error);
+        showStatus("Failed to load chat history. Check console for details.", true);
+    }
+}
+
+// Add event listeners when the document is ready
+document.addEventListener('DOMContentLoaded', async function() {
+    const userInput = document.getElementById('user-input');
+    userInput.addEventListener('keypress', function(event) {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            sendMessage();
+        }
+    });
+    
+    // Set up theme toggle
+    const themeButton = document.getElementById('theme-toggle');
+    themeButton.addEventListener('click', toggleTheme);
+    
+    // Load saved theme preference
+    if (localStorage.getItem('freyaDarkTheme') === 'true') {
+        toggleTheme();
+    }
+    
+    // Set up history button
+    const historyButton = document.getElementById('history-button');
+    historyButton.addEventListener('click', function() {
+        // Show a loading status immediately when clicked
+        showStatus("Loading conversation history...");
+        // Give a small delay to allow the status to appear
+        setTimeout(loadChatHistory, 100);
+    });
+    
+    // Always show a fresh welcome message on startup - history accessible through history button
+    console.log("Starting fresh chat session");
+    displayMessage("Hello there! I'm Freya. Talk to me about anything—philosophy, movies, your deepest thoughts... I'm all digital ears.", true);
+    
+    // Add a small hint about history
+    if (db) {
+        setTimeout(() => {
+            showStatus("Previous conversations can be accessed using the history button", false);
+        }, 3000);
+    }
+});

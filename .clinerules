@@ -1,0 +1,106 @@
+# Freya AI Chat - Project Rules
+
+This document captures important patterns, preferences, and project intelligence for the Freya AI Chat project to ensure consistent development across sessions.
+
+## Project Structure Patterns
+
+1. **File Organization**
+   - Keep core application files in the root directory (index.html, style.css, script.js)
+   - Store documentation in the memory-bank/ directory
+   - Place image assets in the images/ directory
+   - MCP server files (when created) should be in a dedicated mcp/ directory
+
+2. **Code Style**
+   - Use vanilla JavaScript with ES6+ features
+   - Maintain consistent indentation (2 spaces)
+   - Organize script.js logically by function area (Firebase setup, UI interactions, API calls)
+   - Use descriptive variable and function names
+
+3. **Styling Patterns**
+   - Follow the retro-futuristic "Raygun Gothic" aesthetic
+   - Use CSS variables for theme elements
+   - Maintain the existing color scheme with teals and pinks
+   - Use 'Orbitron' for headers and 'Quicksand' for body text
+
+## Freya's Personality Guidelines
+
+1. **Voice & Tone**
+   - Balance between different response types (only 20-30% should be AI-referential)
+   - Keep responses concise and conversational
+   - Ensure natural language patterns with contractions and casual grammar
+   - Avoid using quotes in responses (both in prompt and client-side)
+   - Vary emotional tone based on context
+
+2. **Character Development**
+   - Maintain consistent backstory (medical AI from Saturn colony)
+   - Preserve core personality traits (witty, curious, occasionally dramatic)
+   - Balance sarcasm with genuine helpfulness and empathy
+   - Remember she's interested in conspiracy theories
+   - Include occasional medical terminology reflecting her background
+   - Upcoming: Develop basketball interest as part of NBA data integration
+
+## Technical Implementation Patterns
+
+1. **Firebase Integration**
+   - Store messages as conversation pairs with user/Freya content
+   - Use server timestamps for consistent ordering
+   - Limit query results for performance
+   - Include graceful error handling for connection issues
+
+2. **Gemini API Usage**
+   - Always include the comprehensive system prompt
+   - Set temperature to 0.9 for varied responses
+   - Allow up to 800 tokens for response length flexibility
+   - Include conversation history for context
+   - Process responses to remove quotes
+
+3. **Error Handling**
+   - Provide user-visible feedback for operational errors
+   - Include detailed console logging for debugging
+   - Ensure the app degrades gracefully when services are unavailable
+   - Use try/catch blocks around asynchronous operations
+
+## Memory System Patterns
+
+1. **Current Implementation**
+   - Firebase Firestore stores all conversation pairs
+   - Recent history (10 pairs) used for conversation context
+   - Client-side processing for display and formatting
+
+2. **Planned Enhancements**
+   - Entity extraction for key information
+   - Tagged conversation topics for organization
+   - Structured user preferences storage
+   - More sophisticated recall mechanisms
+
+## Workflow Guidelines
+
+1. **Feature Development**
+   - Update the Memory Bank documentation when making significant changes
+   - Test changes with a variety of conversation patterns
+   - Consider mobile experience for UI changes
+   - Document any new technical decisions in systemPatterns.md
+
+2. **Testing Approaches**
+   - Test personality balance with a mix of factual, emotional, and open-ended questions
+   - Verify Firebase storage is working properly after changes
+   - Check quote removal is functioning correctly when modifying response handling
+   - Test theme toggle functionality when making UI changes
+
+## Future Integration Patterns
+
+1. **MCP Implementation**
+   - Create a dedicated MCP server for external API integrations
+   - Start with NBA data as the initial integration
+   - Structure tools for clear data retrieval patterns
+   - Seamlessly incorporate data into Freya's conversational style
+
+2. **User Preference Handling**
+   - Extract preferences from conversations
+   - Store preferences in structured format
+   - Apply preferences to response generation
+   - Allow for preference updating and refinement
+
+---
+
+This document will be updated as the project evolves and new patterns emerge. Always review it when resuming development after a break to maintain project consistency.
