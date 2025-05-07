@@ -32,7 +32,7 @@ try {
 }
 
 
-import { getGeminiKey } from './js/apiLogic.js'; // Import the key retrieval function
+import { getOpenAIKey } from './js/apiLogic.js'; // Import the key retrieval function
 
 // API Configuration - GPT-4o
 const OPENAI_MODEL = "gpt-4o-2024-08-06";
@@ -989,7 +989,7 @@ async function sendMessage() {
             method: "POST",
             headers: { 
                 "Content-Type": "application/json",
-                "Authorization": `Bearer ${getGeminiKey()}` // Use the key from localStorage
+                "Authorization": `Bearer ${getOpenAIKey()}` // Use the key from localStorage
             },
             body: JSON.stringify(requestBody)
         });
@@ -997,9 +997,9 @@ async function sendMessage() {
         console.log("Response status:", response.status);
         
         if (response.status === 401 || response.status === 403) {
-            // Potentially clear the key or prompt user if using getGeminiKey implies it's the same key system
-            // import { clearGeminiKey, showAPIKeyModal } from './js/apiLogic.js'; // If needed
-            // clearGeminiKey();
+            // Potentially clear the key or prompt user if the key is invalid
+            // import { clearOpenAIKey, showAPIKeyModal } from './js/apiLogic.js'; // If needed
+            // clearOpenAIKey();
             // showAPIKeyModal(showStatus); // showStatus needs to be defined or passed if this is used
             throw new Error(`API key is invalid or expired. Please update it via the usual mechanism.`);
         }
@@ -1155,37 +1155,6 @@ function saveToFirebase(userMessage, botReply) {
     } catch (error) {
         console.error("Error in saveToFirebase function:", error);
     }
-}
-
-// Helper function to recursively find a text property in an object
-function findTextInObject(obj, depth = 0, maxDepth = 5) {
-    // Prevent infinite recursion
-    if (depth > maxDepth) return null;
-    
-    // Handle null/undefined
-    if (!obj) return null;
-    
-    // If it's not an object, return null
-    if (typeof obj !== 'object') return null;
-    
-    // Try to find a text property directly
-    if ('text' in obj && typeof obj.text === 'string') {
-        return obj.text;
-    }
-    
-    // Recursively search through all properties
-    for (const key in obj) {
-        if (key === 'text' && typeof obj[key] === 'string') {
-            return obj[key];
-        }
-        
-        if (typeof obj[key] === 'object') {
-            const found = findTextInObject(obj[key], depth + 1, maxDepth);
-            if (found) return found;
-        }
-    }
-    
-    return null;
 }
 
 window.sendMessage = sendMessage;

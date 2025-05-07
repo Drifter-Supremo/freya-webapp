@@ -65,29 +65,8 @@ function displayMessage(text, isFreya = false, useTypingEffect = false) {
     
     // Only process Freya's messages
     if (isFreya) {
-        // Log the original message content for debugging
-        console.log("Original Freya message:", messageContent);
-        
-        // Check if the entire message is wrapped in quotes
-        if ((messageContent.startsWith('"') && messageContent.endsWith('"')) || 
-            (messageContent.startsWith("'") && messageContent.endsWith("'"))) {
-            messageContent = messageContent.substring(1, messageContent.length - 1);
-        }
-        
-        // Look for quotes at beginning of the string
-        if (messageContent.startsWith('"') || messageContent.startsWith("'")) {
-            messageContent = messageContent.substring(1);
-        }
-        
-        // Look for quotes at end of the string
-        if (messageContent.endsWith('"') || messageContent.endsWith("'")) {
-            messageContent = messageContent.substring(0, messageContent.length - 1);
-        }
-        
-        // Remove asterisks while preserving content
-        messageContent = messageContent.replace(/\*([^*]+)\*/g, '$1');
-        
-        console.log("After quote removal:", messageContent);
+        // messageContent is already processed by apiLogic.js before being passed here.
+        // console.log("Freya message for display:", messageContent);
 
         if (useTypingEffect) {
             // Create text container and cursor for typing effect

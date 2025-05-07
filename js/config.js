@@ -1,8 +1,2 @@
-export const VERTEX = {
-  PROJECT_ID: "741580083810",
-  REGION: "us-central1",
-  ENDPOINT_ID: "1976575560578498560"
-};
-
-export const buildVertexUrl = (apiKey) =>
-  `https://${VERTEX.REGION}-aiplatform.googleapis.com/v1/projects/${VERTEX.PROJECT_ID}/locations/${VERTEX.REGION}/endpoints/${VERTEX.ENDPOINT_ID}:generateContent?key=${apiKey}`;
+// This file can be used for future OpenAI-specific configurations if needed.
+// For now, it's empty as the model ID and API key are handled in apiLogic.js

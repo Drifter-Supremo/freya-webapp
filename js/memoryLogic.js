@@ -588,7 +588,11 @@ async function buildMemoryContext(userMessage) {
     // Tier 2: Add recent conversation history
     const recentHistory = await getConversationHistory();
     if (recentHistory.length > 0) {
-        messages.push(...recentHistory);
+        // Filter out any messages with invalid content
+        const filteredHistory = recentHistory.filter(
+            m => typeof m.content === 'string' && m.content.trim().length > 0
+        );
+        messages.push(...filteredHistory);
     }
     
     // Extract topics from current user message
@@ -670,6 +674,8 @@ async function buildMemoryContext(userMessage) {
     // This ensures we always have access to important facts regardless of immediate relevance
     const allUserFacts = await getUserFacts();
     if (allUserFacts.length > 0) {
+        // Defensive: ensure all facts are strings
+        const filteredFacts = allUserFacts.filter(fact => typeof fact.value === 'string' && fact.value.trim().length > 0);
         // Format facts into a structured message
         let factsMessage = "All known facts about the user:";
         
@@ -699,6 +705,14 @@ async function buildMemoryContext(userMessage) {
         role: "user",
         content: userMessage
     });
+
+    // Log context size (for debugging token limits)
+    // Note: Token management currently relies on numerical limits (e.g., last 40 messages),
+    // not precise token counting. This is a rough estimate.
+    const totalMessages = messages.length;
+    const estimatedChars = messages.reduce((sum, msg) => sum + (msg.content ? msg.content.length : 0), 0);
+    const estimatedTokens = Math.ceil(estimatedChars / 4); // Rough estimate: 1 token ~ 4 chars
+    console.log(`Built memory context: ${totalMessages} messages, ~${estimatedTokens} tokens (${estimatedChars} chars)`);
     
     return messages;
 }

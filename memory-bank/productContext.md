@@ -87,3 +87,9 @@ Freya is intended to grow over time, with planned expansions to both her technic
    - Potential serverless functions for enhanced security
 
 The goal is for Freya to serve as both a living portfolio piece that demonstrates technical skills and an ongoing exploration of creating more human, emotionally intelligent AI interactions.
+
+## Recent Session Updates
+- Updated backend integration to utilize a fine-tuned OpenAI GPT‑4.1 Mini model in js/apiLogic.js.
+- Refined API key management and error handling.
+- Verified Firebase configuration (js/firebaseEnv.js) and "openai" npm dependency installation.
+- Documentation in memory-bank files updated to reflect these changes.

@@ -1,5 +1,5 @@
 // API Logic
-// This file handles Gemini API interactions, key management, and response processing
+// This file handles OpenAI API interactions, API key management, and response processing
 
 import { 
     saveToFirebase, 
@@ -8,7 +8,7 @@ import {
     isFirebaseInitialized 
 } from './firebaseLogic.js';
 import { buildMemoryContext } from './memoryLogic.js';
-import { buildVertexUrl } from "./config.js";
+// import OpenAI from "openai"; // REMOVED: Not browser-compatible. Using fetch instead.
 
 // API Configuration
 const DEFAULT_TEMPERATURE = 0.7;
@@ -16,26 +16,26 @@ const MAX_TOKENS = 800;
 
 // API Key Management Functions
 // Store API key in localStorage
-function setGeminiKey(key) {
+function setOpenAIKey(key) {
     if (!key) return false;
-    localStorage.setItem('gemini-api-key', key);
+    localStorage.setItem('openai-api-key', key);
     return true;
 }
 
 // Retrieve API key from localStorage
-function getGeminiKey() {
-    return localStorage.getItem('gemini-api-key');
+function getOpenAIKey() {
+    return localStorage.getItem('openai-api-key');
 }
 
 // Clear API key from localStorage
-function clearGeminiKey() {
-    localStorage.removeItem('gemini-api-key');
+function clearOpenAIKey() {
+    localStorage.removeItem('openai-api-key');
 }
 
 // Check if the API key is in the correct format
-function isValidGeminiKey(key) {
-    // Validate Gemini API key format (AIza followed by 35 characters)
-    return /^AIza[0-9A-Za-z-_]{35}$/.test(key);
+function isValidOpenAIKey(key) {
+    // Validate OpenAI API key format (e.g., sk-proj- followed by alphanumeric characters)
+    return /^sk-proj-[a-zA-Z0-9-_]{40,}$/.test(key); // Adjusted length assumption
 }
 
 // Process and clean the API response
@@ -66,7 +66,7 @@ function processResponse(response) {
     return processedResponse;
 }
 
-// Send a message to the Gemini API and process the response
+// Send a message to the OpenAI API and process the response
 async function sendMessageToAPI(userInput, showStatus, displayMessage) {
     if (!userInput) return null;
 
@@ -82,12 +82,12 @@ async function sendMessageToAPI(userInput, showStatus, displayMessage) {
     chatBox.scrollTop = chatBox.scrollHeight;
     
     try {
-        console.log("Sending request to Gemini Chat API with enhanced memory...");
+        console.log("Sending request to OpenAI API with enhanced memory...");
         
         // Get API key
-        const apiKey = getGeminiKey();
+        const apiKey = getOpenAIKey();
         if (!apiKey) {
-            throw new Error("API key not found. Please enter your Gemini API key.");
+            throw new Error("API key not found. Please enter your OpenAI API key.");
         }
         
         // Check Firebase initialization
@@ -101,131 +101,96 @@ async function sendMessageToAPI(userInput, showStatus, displayMessage) {
         if (!conversationId) {
             throw new Error("Could not get or create conversation");
         }
-
-        // Format for Gemini API
-        const apiUrl = buildVertexUrl(apiKey);
-        console.log("Using API URL:", apiUrl);
         
         // Build memory context using 3-tier system
         console.log("Building memory context using 3-tier system...");
-        const messages = await buildMemoryContext(userInput);
-        
-        // Convert messages to Gemini API format
-        const contents = messages.map(msg => ({
-            role: msg.role === "assistant" ? "model" : "user",
-            parts: [{ text: msg.content }]
-        }));
+        // The buildMemoryContext function returns messages in a format like:
+        // [{ role: "system", content: "System prompt..." }, { role: "user", content: "User input..."}]
+        // or [{ role: "user", content: "User input..." }, { role: "assistant", content: "Assistant response..."}]
+        // This is already compatible with OpenAI's expected format.
+        const messagesForAPI = await buildMemoryContext(userInput);
 
         // Log memory context details
-        console.log("Memory context details:");
-        console.log("- System prompt included:", contents.some(c => c.parts[0].text.includes("SYSTEM PROMPT")));
-        console.log("- Total context messages:", contents.length);
-        console.log("- Context structure:", JSON.stringify(contents.slice(0, 3), null, 2) + "... (truncated)");
+        console.log("Memory context details for OpenAI:");
+        console.log("- System prompt included:", messagesForAPI.some(m => m.role === "system"));
+        console.log("- Total context messages:", messagesForAPI.length);
+        console.log("- Context structure:", JSON.stringify(messagesForAPI.slice(0, 3), null, 2) + "... (truncated)");
 
-        // Gemini API request body
-        const requestBody = {
-            contents: contents,
-            generationConfig: {
-                temperature: DEFAULT_TEMPERATURE,
-                maxOutputTokens: MAX_TOKENS
-            }
-        };
-
-        const response = await fetch(apiUrl, {
+        // --- Browser-based OpenAI API call using fetch ---
+        const fetchResponse = await fetch("https://api.openai.com/v1/chat/completions", {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
-                "x-goog-api-key": apiKey
+                "Authorization": `Bearer ${apiKey}`
             },
-            body: JSON.stringify(requestBody)
+            body: JSON.stringify({
+                model: "ft:gpt-4.1-mini-2025-04-14:gorlea-industries:freya:BULkCmxj",
+                messages: messagesForAPI,
+                temperature: DEFAULT_TEMPERATURE,
+                max_tokens: MAX_TOKENS
+            })
         });
 
-        console.log("Response status:", response.status);
-        
-        // Handle authentication errors
-        if (response.status === 401 || response.status === 403) {
-            clearGeminiKey(); // Clear invalid key
-            throw new Error("API key is invalid or expired. Please provide a valid Gemini API key.");
-        }
-        
-        if (!response.ok) {
-            throw new Error(`API request failed with status ${response.status}: ${response.statusText}`);
-        }
-        
-        const result = await response.json();
-        console.log("Full API response:", result);
-        
         // Remove typing indicator
-        chatBox.removeChild(typingIndicator);
-        
-        if (result && result.candidates && result.candidates.length > 0) {
-            console.log("Found candidates in response");
-            
-            // Log the candidate structure for debugging
-            console.log("Candidate structure:", JSON.stringify(result.candidates[0], null, 2));
-            
-            // Extract reply from Gemini response format
-            const reply = result.candidates[0].content.parts[0].text;
-            console.log("Extracted reply from content.parts[0].text");
-            
+        if (typingIndicator && typingIndicator.parentNode) {
+            chatBox.removeChild(typingIndicator);
+        }
+
+        if (!fetchResponse.ok) {
+            let errorMessage = `OpenAI API error: ${fetchResponse.status}`;
+            try {
+                const errorData = await fetchResponse.json();
+                if (errorData && errorData.error && errorData.error.message) {
+                    errorMessage = errorData.error.message;
+                }
+            } catch (err) {}
+            showStatus(errorMessage, true);
+            throw new Error(errorMessage);
+        }
+
+        const data = await fetchResponse.json();
+        if (data && data.choices && data.choices.length > 0 && data.choices[0].message) {
+            const reply = data.choices[0].message.content;
+            console.log("Extracted reply from OpenAI response");
             // Process the response (remove quotes, etc.)
             const processedReply = processResponse(reply);
-            
             // Display and save the message
-            displayMessage(processedReply, true, true); 
+            displayMessage(processedReply, true, true);
             await saveToFirebase(userInput, processedReply);
-            
             return { reply: processedReply };
-        } else if (result.error) {
-            console.error("API error:", result.error);
-            showStatus(`There was an API error: ${result.error.message || JSON.stringify(result.error)}`, true);
+        } else if (data.error) {
+            console.error("API error:", data.error);
+            showStatus(`There was an API error: ${data.error.message || JSON.stringify(data.error)}`, true);
             return null;
         } else {
-            console.error("No valid response structure:", result);
+            console.error("No valid response structure:", data);
             showStatus("Oops, I received a response but couldn't understand it. Check the console for details.", true);
             return null;
         }
     } catch (error) {
         // Remove typing indicator if it exists
-        if (typingIndicator.parentNode) {
+        if (typingIndicator && typingIndicator.parentNode) {
             chatBox.removeChild(typingIndicator);
         }
         
         console.error("Error in sendMessageToAPI:", error);
-        showStatus(`Sorry, there was an error: ${error.message}`, true);
-        throw error; // Re-throw the error
-    }
-}
+        let errorMessage = `Sorry, there was an error: ${error.message}`;
 
-// Helper function to recursively find a text property in an object
-function findTextInObject(obj, depth = 0, maxDepth = 5) {
-    // Prevent infinite recursion
-    if (depth > maxDepth) return null;
-    
-    // Handle null/undefined
-    if (!obj) return null;
-    
-    // If it's not an object, return null
-    if (typeof obj !== 'object') return null;
-    
-    // Try to find a text property directly
-    if ('text' in obj && typeof obj.text === 'string') {
-        return obj.text;
-    }
-    
-    // Recursively search through all properties
-    for (const key in obj) {
-        if (key === 'text' && typeof obj[key] === 'string') {
-            return obj[key];
+        if (error.name === 'AuthenticationError' || error.status === 401) {
+            errorMessage = "OpenAI API key is invalid or expired. Please check your key.";
+            clearOpenAIKey(); // Clear the invalid key
+        } else if (error.name === 'RateLimitError' || error.status === 429) {
+            errorMessage = "You've exceeded your OpenAI API quota or rate limit. Please check your usage or try again later.";
+        } else if (error.name === 'APIError' && error.status === 500) {
+            errorMessage = "OpenAI is experiencing issues. Please try again later.";
+        } else if (error.name === 'NotFoundError' || error.status === 404) {
+            errorMessage = "The OpenAI model was not found. Please check the model ID. It's possible the fine-tuned model is not ready or the ID is incorrect.";
         }
-        
-        if (typeof obj[key] === 'object') {
-            const found = findTextInObject(obj[key], depth + 1, maxDepth);
-            if (found) return found;
-        }
+        // Add more specific OpenAI error checks here if needed
+
+        showStatus(errorMessage, true);
+        throw error; // Re-throw the error for further handling if necessary
     }
-    
-    return null;
 }
 
 // Display API key input modal
@@ -242,18 +207,18 @@ function showAPIKeyModal(showStatus) {
     
     // Create modal title
     const modalTitle = document.createElement('h2');
-    modalTitle.textContent = 'Enter Gemini API Key';
+    modalTitle.textContent = 'Enter OpenAI API Key';
     modalContent.appendChild(modalTitle);
     
     // Create description
     const description = document.createElement('p');
-    description.textContent = 'Please enter your Gemini API key to continue. The key will be stored in your browser and used only for API calls to Gemini.';
+    description.textContent = 'Please enter your OpenAI API key to continue. The key will be stored in your browser and used only for API calls to OpenAI.';
     modalContent.appendChild(description);
     
     // Create input field
     const apiKeyInput = document.createElement('input');
     apiKeyInput.type = 'password';
-    apiKeyInput.placeholder = 'AIza...';
+    apiKeyInput.placeholder = 'sk-proj-...';
     apiKeyInput.className = 'api-key-input';
     modalContent.appendChild(apiKeyInput);
     
@@ -266,18 +231,18 @@ function showAPIKeyModal(showStatus) {
     // Show key format note
     const formatNote = document.createElement('p');
     formatNote.className = 'key-format-note';
-    formatNote.textContent = 'API Key should start with "AIza" and be a valid Gemini key format.';
+    formatNote.textContent = 'API Key should start with "sk-proj-" and be a valid OpenAI key format.';
     modalContent.appendChild(formatNote);
     
     // Handle submit button click
     submitButton.addEventListener('click', () => {
         const key = apiKeyInput.value.trim();
-        if (isValidGeminiKey(key)) {
-            setGeminiKey(key);
+        if (isValidOpenAIKey(key)) {
+            setOpenAIKey(key);
             document.body.removeChild(modalContainer);
             showStatus('API key saved successfully!');
         } else {
-            formatNote.textContent = 'Invalid Gemini API key format. Please check and try again.';
+            formatNote.textContent = 'Invalid OpenAI API key format. Please check and try again.';
             formatNote.style.color = '#ff4d6d';
         }
     });
@@ -295,7 +260,7 @@ function showAPIKeyModal(showStatus) {
 
 // Check for API key and show modal if not available
 function ensureAPIKey(showStatus) {
-    const key = getGeminiKey();
+    const key = getOpenAIKey();
     if (!key) {
         showAPIKeyModal(showStatus);
         return false;
@@ -306,10 +271,10 @@ function ensureAPIKey(showStatus) {
 // Export API-related functions
 export {
     sendMessageToAPI,
-    getGeminiKey,
-    setGeminiKey,
-    clearGeminiKey,
-    isValidGeminiKey,
+    getOpenAIKey,
+    setOpenAIKey,
+    clearOpenAIKey,
+    isValidOpenAIKey,
     ensureAPIKey,
     showAPIKeyModal
 };
